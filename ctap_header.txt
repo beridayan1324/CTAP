@@ -1,0 +1,11 @@
+{
+  "type": "CTAP_MSG",
+  "msg_id": "uuid",
+  "from": "userA",
+  "room": "alpha",
+  "aes_key_enc": "BASE64_RSA_AES_KEY",
+  "payload": {
+    "nonce": "...",
+    "ciphertext": "..."
+  }
+}
