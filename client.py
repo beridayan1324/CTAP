@@ -72,52 +72,26 @@ def encrypt_message(plaintext: str) -> dict:
 # =======================
 # SERIAL SETUP
 # =======================
-import sys # Added to handle exit if needed
-
 # ==========================================
-# SERIAL SETUP (Commented Out)
+# SERIAL SETUP
 # ==========================================
-# ser = serial.Serial(
-#     port=SERIAL_PORT,
-#     baudrate=BAUD_RATE,
-#     timeout=1
-# )
-# print("[CTAP] Serial connected")
-
-# def read_binary_sentence():
-#     try:
-#         line = ser.readline().decode().strip()
-#         if not line:
-#             return None
-#         # Example input: "00011 00001"
-#         return line.split()
-#     except Exception as e:
-#         print("[SERIAL ERROR]", e)
-#         return None
-
-# ==========================================
-# MANUAL INPUT SETUP (New Code)
-# ==========================================
-print("[CTAP] Manual Input Mode Enabled")
+ser = serial.Serial(
+    port=SERIAL_PORT,
+    baudrate=BAUD_RATE,
+    timeout=1
+)
+print("[CTAP] Serial connected")
 
 def read_binary_sentence():
     try:
-        # This will pause the program and wait for you to type
-        line = input("Enter data (e.g., '00011 00001'): ").strip()
-        
+        line = ser.readline().decode().strip()
         if not line:
             return None
-
-        # Mimic the split behavior of the original code
+        # Example input: "00011 00001"
         return line.split()
-        
-    except (EOFError, KeyboardInterrupt):
-        print("\n[CTAP] Stopping manual input...")
-        sys.exit(0)
     except Exception as e:
-        print("[INPUT ERROR]", e)
+        print("[SERIAL ERROR]", e)
         return None
-
 # =======================
 # BINARY → TEXT
 # =======================
