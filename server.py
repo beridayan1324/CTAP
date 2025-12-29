@@ -80,8 +80,8 @@ async def handler(websocket):
 
 async def main():
     # Start the server on port 8765
-    async with websockets.serve(handler, "10.0.0.6", 8765):
-        print("[SERVER] Listening on ws://10.0.0.6:8765...")
+    async with websockets.serve(handler, "0.0.0.0", 8765):
+        print("[SERVER] Listening on ws://0.0.0.0:8765...")
         await asyncio.Future()  # Run forever
 
 if __name__ == "__main__":
