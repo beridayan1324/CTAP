@@ -1,1 +1,3 @@
-pip install pyserial websockets cryptography
+pyserial
+websockets
+cryptography
