@@ -1,6 +1,8 @@
 // ===== ESP32 PIN CONFIG =====
-int piezoPins[] = {34, 35, 32, 33};  // 3 fingers + SEND (Space)
-int numPiezos = 4;
+// Fingers: 34, 35, 32, 33, 25
+// Send/Space: 26
+int piezoPins[] = {34, 35, 32, 33, 25, 26};  
+int numPiezos = 6; 
 
 int ledPin = 2;
 
@@ -8,13 +10,14 @@ int ledPin = 2;
 int thresholdDrop = 200;
 int baseline = 800;
 unsigned long debounceTime = 50;
-unsigned long letterWait = 300; // Increased slightly to give time to hit multiple fingers
+unsigned long letterWait = 250; 
 
 // ===== STATE =====
-int lastReading[4] = {0};
-unsigned long lastHitTime[4] = {0};
+int lastReading[6] = {0};         
+unsigned long lastHitTime[6] = {0}; 
 
-bool fingerHit[3] = {false, false, false};
+// Track 5 fingers
+bool fingerHit[5] = {false, false, false, false, false}; 
 unsigned long firstHitTime = 0;
 
 // Track consecutive space hits
@@ -30,8 +33,8 @@ void setup() {
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
 
-  Serial.println("CTAP Text Translation Mode Ready");
-  Serial.println("Mapping: 001=a, 010=b, 100=c, 101=d, etc.");
+  Serial.println("CTAP 5-Finger Mode Ready");
+  Serial.println("Pins: 34, 35, 32, 33, 25 (Fingers) | 26 (Send)");
 }
 
 void loop() {
@@ -50,14 +53,15 @@ void loop() {
       lastHitTime[i] = now;
       digitalWrite(ledPin, !digitalRead(ledPin)); // Flash LED
 
-      if (i < 3) {
+      // Indices 0, 1, 2, 3, 4 are FINGERS (Pins 34, 35, 32, 33, 25)
+      if (i < 5) {
         // --- FINGER HIT ---
         spaceHitCount = 0; // Reset space streak
         fingerHit[i] = true;
         if (firstHitTime == 0) firstHitTime = now;
 
       } else {
-        // --- SPACE HIT (Piezo 3) ---
+        // --- SPACE HIT (Index 5 -> Pin 26) ---
         spaceHitCount++;
 
         if (spaceHitCount >= 3) {
@@ -76,7 +80,6 @@ void loop() {
         } 
         else {
             // === STANDARD SPACE ===
-            // Only add space if we have previous text and it's not already a space
             if (textSentence.length() > 0 && 
                 textSentence[textSentence.length() - 1] != ' ') {
               textSentence += " ";
@@ -90,20 +93,18 @@ void loop() {
   // --- TRANSLATE and finish letter after timeout ---
   if (firstHitTime != 0 && (now - firstHitTime > letterWait)) {
     
-    // 1. Build the binary string (e.g., "101")
+    // 1. Build the binary string (e.g., "00101")
     String currentBits = "";
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
       currentBits += fingerHit[i] ? "1" : "0";
     }
 
-    // 2. Convert "101" to "d"
+    // 2. Convert "00101" to letter
     String letter = getLetterFromBits(currentBits);
 
     // 3. Add to sentence
     if (letter != "") {
       textSentence += letter;
-      // Optional: Print partially built sentence to see progress
-      // Serial.print("Current: "); Serial.println(textSentence); 
     }
 
     resetFingers();
@@ -113,21 +114,41 @@ void loop() {
 }
 
 // ===== DICTIONARY =====
-// Change the letters here to customize your layout
+// 5-bit Binary (Alphabetical Order A-Z)
 String getLetterFromBits(String bits) {
-  if (bits == "001") return "a";
-  if (bits == "010") return "b";
-  if (bits == "100") return "c";
+  if (bits == "00001") return "a";
+  if (bits == "00010") return "b";
+  if (bits == "00011") return "c";
+  if (bits == "00100") return "d";
+  if (bits == "00101") return "e";
+  if (bits == "00110") return "f";
+  if (bits == "00111") return "g";
+  if (bits == "01000") return "h";
+  if (bits == "01001") return "i";
+  if (bits == "01010") return "j";
+  if (bits == "01011") return "k";
+  if (bits == "01100") return "l";
+  if (bits == "01101") return "m";
+  if (bits == "01110") return "n";
+  if (bits == "01111") return "o";
+  if (bits == "10000") return "p";
+  if (bits == "10001") return "q";
+  if (bits == "10010") return "r";
+  if (bits == "10011") return "s";
+  if (bits == "10100") return "t";
+  if (bits == "10101") return "u";
+  if (bits == "10110") return "v";
+  if (bits == "10111") return "w";
+  if (bits == "11000") return "x";
+  if (bits == "11001") return "y";
+  if (bits == "11010") return "z";
   
-  if (bits == "101") return "d"; 
-  if (bits == "011") return "e"; 
-  if (bits == "110") return "f"; 
-  if (bits == "111") return "g"; 
+  if (bits == "11111") return "?"; 
   
-  return ""; // Returns empty if 000
+  return ""; 
 }
 
 void resetFingers() {
-  for (int i = 0; i < 3; i++) fingerHit[i] = false;
+  for (int i = 0; i < 5; i++) fingerHit[i] = false;
   firstHitTime = 0;
 }
