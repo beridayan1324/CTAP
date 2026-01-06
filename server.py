@@ -3,6 +3,8 @@ import websockets
 import json
 import base64
 import binascii
+import uuid
+import time
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # =======================
@@ -125,6 +127,38 @@ async def handler(websocket):
                         print("="*50)
                     else:
                         print(f"[SERVER] Received raw/unknown message: {message}")
+                
+                elif msg_type == "web_msg":
+                    # Plain text message from web client
+                    text = data.get("text", "").strip()
+                    if text:
+                        # Check for shutdown
+                        if text == "/shutdown":
+                            print(f"[SERVER] Shutdown command received from {websocket.remote_address}")
+                            stop_event.set()
+                            continue
+                        
+                        # Broadcast
+                        broadcast_message = {
+                            "type": "chat_message",
+                            "text": text,
+                            "timestamp": int(time.time()),
+                            "msg_id": str(uuid.uuid4()),
+                            "sender": f"Web-{websocket.remote_address}",
+                            "room": current_room
+                        }
+                        
+                        for client in rooms.get(current_room, set()):
+                            try:
+                                await client.send(json.dumps(broadcast_message))
+                            except:
+                                pass
+                        
+                        print("\n" + "="*50)
+                        print(f"Room:    {current_room}")
+                        print(f"Sender:  Web-{websocket.remote_address}")
+                        print(f"Message: {text}")
+                        print("="*50)
 
             except json.JSONDecodeError:
                 print(f"[SERVER] Received non-JSON message: {message}")
@@ -149,7 +183,6 @@ async def main():
         print("[SERVER] Shutting down...")
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
+    
+    asyncio.run(main())
+        

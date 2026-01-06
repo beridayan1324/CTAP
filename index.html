@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTAP Chat Room</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 15px 15px 0 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+        }
+        .room-section {
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .serial-section {
+            padding: 10px 15px;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .serial-section button {
+            padding: 6px 12px;
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .serial-section button:hover {
+            background: #138496;
+        }
+        .serial-section button.connected {
+            background: #28a745;
+        }
+        .room-section input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+        }
+        .room-section button {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .room-section button:hover {
+            background: #218838;
+        }
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .message.own {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+        .message.other {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-bottom-left-radius: 0;
+        }
+        .message .sender {
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .message .time {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+        .input-section {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+        }
+        .input-section input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 25px;
+            outline: none;
+        }
+        .input-section button {
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .input-section button:hover {
+            background: #0056b3;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            background: #e9ecef;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h1>CTAP Chat Room</h1>
+            <p style="font-size: 0.8em; margin: 5px 0 0 0; opacity: 0.8;">Web Serial API requires Chrome-based browser</p>
+        </div>
+        
+        <div class="room-section">
+            <input type="text" id="roomInput" placeholder="Enter room name" value="default">
+            <button onclick="joinRoom()">Join Room</button>
+            <span id="currentRoom">Current: default</span>
+        </div>
+        
+        <div class="serial-section">
+            <button id="serialBtn" onclick="toggleSerial()">Connect Serial</button>
+            <span id="serialStatus">Serial: Not connected</span>
+        </div>
+        
+        <div id="status" class="status">Connecting...</div>
+        
+        <div id="messages" class="messages"></div>
+        
+        <div class="input-section">
+            <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let currentRoom = 'default';
+        let port;
+        let reader;
+        let serialConnected = false;
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const roomInput = document.getElementById('roomInput');
+        const serialBtn = document.getElementById('serialBtn');
+        const serialStatus = document.getElementById('serialStatus');
+
+        function connect() {
+            ws = new WebSocket('ws://localhost:8766');
+            
+            ws.onopen = function() {
+                statusDiv.textContent = 'Connected to server';
+                statusDiv.className = 'status connected';
+                joinRoom();
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'chat_message') {
+                    displayMessage(data.text, data.sender, data.timestamp, data.room);
+                } else if (data.type === 'room_joined') {
+                    currentRoom = data.room;
+                    document.getElementById('currentRoom').textContent = `Current: ${currentRoom}`;
+                    messagesDiv.innerHTML = ''; // Clear messages when joining new room
+                    addSystemMessage(`Joined room: ${currentRoom}`);
+                }
+            };
+            
+            ws.onclose = function() {
+                statusDiv.textContent = 'Disconnected from server';
+                statusDiv.className = 'status disconnected';
+                setTimeout(connect, 3000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                statusDiv.textContent = 'Connection error';
+                statusDiv.className = 'status disconnected';
+            };
+        }
+
+        async function toggleSerial() {
+            if (serialConnected) {
+                await disconnectSerial();
+            } else {
+                await connectSerial();
+            }
+        }
+
+        async function connectSerial() {
+            try {
+                // Request a port
+                port = await navigator.serial.requestPort();
+                
+                // Open the port
+                await port.open({ 
+                    baudRate: 115200,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none'
+                });
+                
+                serialConnected = true;
+                serialBtn.textContent = 'Disconnect Serial';
+                serialBtn.classList.add('connected');
+                serialStatus.textContent = 'Serial: Connected';
+                
+                // Start reading
+                readSerial();
+                
+            } catch (error) {
+                console.error('Serial connection failed:', error);
+                serialStatus.textContent = 'Serial: Connection failed';
+            }
+        }
+
+        async function readSerial() {
+            try {
+                while (port && port.readable) {
+                    reader = port.readable.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    try {
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = decoder.decode(value, { stream: true });
+                            const lines = chunk.split('\n');
+                            
+                            for (const line of lines) {
+                                const plaintext = line.trim();
+                                if (plaintext && !plaintext.includes('CTAP') && ws.readyState === WebSocket.OPEN) {
+                                    // Send as message
+                                    ws.send(JSON.stringify({
+                                        type: 'web_msg',
+                                        text: plaintext
+                                    }));
+                                    addSystemMessage(`[SERIAL] Sent: ${plaintext}`);
+                                }
+                            }
+                        }
+                    } finally {
+                        reader.releaseLock();
+                    }
+                }
+            } catch (error) {
+                console.error('Serial read error:', error);
+                disconnectSerial();
+            }
+        }
+
+        async function disconnectSerial() {
+            try {
+                if (reader) {
+                    await reader.cancel();
+                    reader = null;
+                }
+                if (port) {
+                    await port.close();
+                    port = null;
+                }
+                serialConnected = false;
+                serialBtn.textContent = 'Connect Serial';
+                serialBtn.classList.remove('connected');
+                serialStatus.textContent = 'Serial: Not connected';
+            } catch (error) {
+                console.error('Serial disconnect error:', error);
+            }
+        }
+
+        function joinRoom() {
+            const roomName = roomInput.value.trim();
+            if (roomName) {
+                ws.send(JSON.stringify({
+                    type: 'join_room',
+                    room: roomName
+                }));
+            }
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'web_msg',
+                    text: message
+                }));
+                messageInput.value = '';
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function displayMessage(text, sender, timestamp, room) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message other';
+            
+            const time = new Date(timestamp * 1000).toLocaleTimeString();
+            
+            messageDiv.innerHTML = `
+                <div class="sender">${sender}</div>
+                <div>${text}</div>
+                <div class="time">${time}</div>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message other';
+            messageDiv.style.background = '#f8f9fa';
+            messageDiv.style.border = '1px solid #dee2e6';
+            messageDiv.style.fontStyle = 'italic';
+            messageDiv.style.textAlign = 'center';
+            
+            messageDiv.innerHTML = `<div>${text}</div>`;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Handle page unload to close serial
+        window.addEventListener('beforeunload', () => {
+            if (port) {
+                disconnectSerial();
+            }
+        });
+
+        // Connect when page loads
+        connect();
+    </script>
+</body>
+</html>
