@@ -41,48 +41,112 @@ def decrypt_payload(payload: dict) -> str:
         return f"[DECRYPTION FAILED] {e}"
 
 # =======================
+# GLOBAL STATE
+# =======================
+
+connected_clients = set()
+rooms = {}  # room_name -> set of websockets
+stop_event = asyncio.Event()
+
+# =======================
 # WEBSOCKET HANDLER
 # =======================
 
 async def handler(websocket):
     print(f"[SERVER] Client connected from {websocket.remote_address}")
+    connected_clients.add(websocket)
+    # Default room
+    current_room = "default"
+    if current_room not in rooms:
+        rooms[current_room] = set()
+    rooms[current_room].add(websocket)
+    
     try:
         async for message in websocket:
             try:
                 # 1. Parse JSON packet
                 data = json.loads(message)
+                msg_type = data.get("type")
                 
-                # 2. Extract payload
-                encrypted_payload = data.get("payload")
+                if msg_type == "join_room":
+                    new_room = data.get("room", "default")
+                    # Leave current room
+                    if current_room in rooms and websocket in rooms[current_room]:
+                        rooms[current_room].remove(websocket)
+                    # Join new room
+                    current_room = new_room
+                    if current_room not in rooms:
+                        rooms[current_room] = set()
+                    rooms[current_room].add(websocket)
+                    print(f"[SERVER] {websocket.remote_address} joined room '{current_room}'")
+                    # Notify client
+                    await websocket.send(json.dumps({
+                        "type": "room_joined",
+                        "room": current_room
+                    }))
                 
-                if encrypted_payload:
-                    # 3. Decrypt
-                    decrypted_text = decrypt_payload(encrypted_payload)
+                elif msg_type == "CTAP_MSG":
+                    # 2. Extract payload
+                    encrypted_payload = data.get("payload")
                     
-                    # 4. Print Result
-                    print("\n" + "="*30)
-                    print(f"Time:    {data.get('timestamp')}")
-                    print(f"ID:      {data.get('msg_id')}")
-                    print(f"Message: {decrypted_text}")
-                    print("="*30)
-                else:
-                    print(f"[SERVER] Received raw/unknown message: {message}")
+                    if encrypted_payload:
+                        # 3. Decrypt
+                        decrypted_text = decrypt_payload(encrypted_payload)
+                        
+                        # Check for shutdown command
+                        if decrypted_text == "/shutdown":
+                            print(f"[SERVER] Shutdown command received from {websocket.remote_address}")
+                            stop_event.set()
+                            continue
+                        
+                        # 4. Broadcast to all in current room
+                        broadcast_message = {
+                            "type": "chat_message",
+                            "text": decrypted_text,
+                            "timestamp": data.get('timestamp'),
+                            "msg_id": data.get('msg_id'),
+                            "sender": str(websocket.remote_address),
+                            "room": current_room
+                        }
+                        
+                        for client in rooms.get(current_room, set()):
+                            try:
+                                await client.send(json.dumps(broadcast_message))
+                            except:
+                                pass  # Client might have disconnected
+                        
+                        # 5. Also print to server console
+                        print("\n" + "="*50)
+                        print(f"Room:    {current_room}")
+                        print(f"Time:    {data.get('timestamp')}")
+                        print(f"ID:      {data.get('msg_id')}")
+                        print(f"Sender:  {websocket.remote_address}")
+                        print(f"Message: {decrypted_text}")
+                        print("="*50)
+                    else:
+                        print(f"[SERVER] Received raw/unknown message: {message}")
 
             except json.JSONDecodeError:
                 print(f"[SERVER] Received non-JSON message: {message}")
 
     except websockets.exceptions.ConnectionClosed:
-        print("[SERVER] Client disconnected")
+        print(f"[SERVER] Client {websocket.remote_address} disconnected")
+    finally:
+        connected_clients.remove(websocket)
+        # Remove from room
+        if current_room in rooms and websocket in rooms[current_room]:
+            rooms[current_room].remove(websocket)
 
 # =======================
 # MAIN LOOP
 # =======================
 
 async def main():
-    # Start the server on port 8765
-    async with websockets.serve(handler, "0.0.0.0", 8765):
-        print("[SERVER] Listening on ws://0.0.0.0:8765...")
-        await asyncio.Future()  # Run forever
+    # Start the server on port 8766
+    async with websockets.serve(handler, "0.0.0.0", 8766):
+        print("[SERVER] Listening on ws://0.0.0.0:8766...")
+        await stop_event.wait()  # Wait for shutdown
+        print("[SERVER] Shutting down...")
 
 if __name__ == "__main__":
     try:
