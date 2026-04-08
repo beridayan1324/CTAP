@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -9,22 +10,73 @@ const { initDatabase, logConnection, logMessage } = require('./database');
 const { decryptPayload, verifyHandshakeHash, generateChallenge, generateHash } = require('./cryptoUtils');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET || 'CTAP-SUPER-SECRET-JWT-KEY-2026';
-const SERVER_PORT = 8766;
+// Restrict CORS to known origins
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',');
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. mobile apps, curl) only in dev
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json({ limit: '16kb' }));
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('[FATAL] JWT_SECRET environment variable is not set');
+}
+const SERVER_PORT = process.env.SERVER_PORT || 8766;
+
+// Simple in-memory rate limiter
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 10;
+
+const rateLimit = (req, res, next) => {
+    const ip = req.socket.remoteAddress;
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip) || { count: 0, start: now };
+    if (now - entry.start > RATE_LIMIT_WINDOW_MS) {
+        entry.count = 1;
+        entry.start = now;
+    } else {
+        entry.count++;
+    }
+    rateLimitMap.set(ip, entry);
+    if (entry.count > RATE_LIMIT_MAX) {
+        return res.status(429).json({ error: 'Too many requests, please try again later.' });
+    }
+    next();
+};
 
 let db;
+
+// Input validation helpers
+const USERNAME_REGEX = /^[a-zA-Z0-9_\-]{3,32}$/;
+const PASSWORD_MIN_LEN = 8;
+const PASSWORD_MAX_LEN = 128;
 
 // =======================
 // REST API (Auth & Audit)
 // =======================
-app.post('/register', (req, res) => {
+app.post('/register', rateLimit, (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-    bcrypt.hash(password, 10, (err, hash) => {
+    if (!USERNAME_REGEX.test(username)) {
+        return res.status(400).json({ error: 'Username must be 3-32 alphanumeric characters (underscores and hyphens allowed)' });
+    }
+    if (typeof password !== 'string' || password.length < PASSWORD_MIN_LEN || password.length > PASSWORD_MAX_LEN) {
+        return res.status(400).json({ error: `Password must be between ${PASSWORD_MIN_LEN} and ${PASSWORD_MAX_LEN} characters` });
+    }
+
+    bcrypt.hash(password, 12, (err, hash) => {
         if (err) return res.status(500).json({ error: 'Error hashing password' });
 
         db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hash], function (err) {
@@ -37,8 +89,17 @@ app.post('/register', (req, res) => {
     });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', rateLimit, (req, res) => {
     const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+    if (!USERNAME_REGEX.test(username)) {
+        return res.status(400).json({ error: 'Invalid username or password' });
+    }
+    if (typeof password !== 'string' || password.length < PASSWORD_MIN_LEN || password.length > PASSWORD_MAX_LEN) {
+        return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
     db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
         if (err || !user) return res.status(400).json({ error: 'Invalid username or password' });
 
@@ -61,11 +122,24 @@ const verifyToken = (req, res, next) => {
     });
 };
 
+// Admin role check middleware
+const requireAdmin = (req, res, next) => {
+    if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin access required' });
+    }
+    next();
+};
+
 const queryDbSocket = (command) => {
     return new Promise((resolve, reject) => {
         const net = require('net');
         const client = new net.Socket();
         let buffer = '';
+        // Only allow specific whitelisted commands
+        const ALLOWED_COMMANDS = ['GET_LOGS', 'GET_CONNS'];
+        if (!ALLOWED_COMMANDS.includes(command)) {
+            return reject(new Error('Invalid command'));
+        }
         client.connect(8767, '127.0.0.1', () => {
             client.write(command + '\n');
         });
@@ -88,7 +162,7 @@ const queryDbSocket = (command) => {
     });
 };
 
-app.get('/audit/logs', verifyToken, async (req, res) => {
+app.get('/audit/logs', verifyToken, requireAdmin, async (req, res) => {
     try {
         const data = await queryDbSocket('GET_LOGS');
         res.json(data);
@@ -97,7 +171,7 @@ app.get('/audit/logs', verifyToken, async (req, res) => {
     }
 });
 
-app.get('/audit/connections', verifyToken, async (req, res) => {
+app.get('/audit/connections', verifyToken, requireAdmin, async (req, res) => {
     try {
         const data = await queryDbSocket('GET_CONNS');
         res.json(data);
@@ -110,10 +184,22 @@ app.get('/audit/connections', verifyToken, async (req, res) => {
 // WEBSOCKET SERVER
 // =======================
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({
+    server,
+    verifyClient: (info) => {
+        const origin = info.origin || info.req.headers['origin'];
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+            return true;
+        }
+        return false;
+    }
+});
 
 const connectedClients = new Set();
 const rooms = {}; // room_name -> set of websockets
+
+const ROOM_NAME_REGEX = /^[a-zA-Z0-9_\-]{1,64}$/;
+const MAX_MESSAGE_LENGTH = 4096;
 
 wss.on('connection', async (ws, req) => {
     const clientAddress = req.socket.remoteAddress + ':' + req.socket.remotePort;
@@ -143,13 +229,31 @@ wss.on('connection', async (ws, req) => {
 
     ws.on('message', (message) => {
         try {
-            const data = JSON.parse(message);
+            // Guard against oversized messages
+            if (message.length > MAX_MESSAGE_LENGTH * 2) {
+                console.warn(`[SERVER] Oversized message from ${clientAddress}, ignoring.`);
+                return;
+            }
+
+            let data;
+            try {
+                data = JSON.parse(message);
+            } catch (parseErr) {
+                console.warn(`[SERVER] Invalid JSON from ${clientAddress}`);
+                return;
+            }
+
+            if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+                console.warn(`[SERVER] Unexpected message shape from ${clientAddress}`);
+                return;
+            }
+
             const msgType = data.type;
 
             // Handle Handshake Response
             if (msgType === 'auth_response' && !ws.isHandshakeAuthenticated) {
                 const responseHash = data.hash;
-                if (verifyHandshakeHash(challenge, responseHash)) {
+                if (typeof responseHash === 'string' && verifyHandshakeHash(challenge, responseHash)) {
                     ws.isHandshakeAuthenticated = true;
                     clearTimeout(authTimeout);
                     console.log(`[AUTH] Handshake SUCCESS for ${clientAddress}`);
@@ -168,7 +272,11 @@ wss.on('connection', async (ws, req) => {
 
             // Normal Messaging
             if (msgType === 'join_room') {
-                const newRoom = data.room || 'default';
+                const newRoom = (data.room || 'default').toString().trim();
+                if (!ROOM_NAME_REGEX.test(newRoom)) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Invalid room name.' }));
+                    return;
+                }
                 if (rooms[currentRoom] && rooms[currentRoom].has(ws)) {
                     rooms[currentRoom].delete(ws);
                 }
@@ -180,10 +288,14 @@ wss.on('connection', async (ws, req) => {
             } 
             else if (msgType === 'CTAP_MSG') {
                 const encryptedPayload = data.payload;
-                if (encryptedPayload) {
+                if (encryptedPayload && typeof encryptedPayload === 'object') {
                     const decryptedText = decryptPayload(encryptedPayload);
-                    const msgId = data.msg_id || uuidv4();
-                    const timestamp = data.timestamp || Math.floor(Date.now() / 1000);
+                    if (typeof decryptedText !== 'string' || decryptedText.length > MAX_MESSAGE_LENGTH) {
+                        console.warn(`[SERVER] Decrypted message too long or invalid from ${clientAddress}`);
+                        return;
+                    }
+                    const msgId = typeof data.msg_id === 'string' ? data.msg_id.substring(0, 64) : uuidv4();
+                    const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Math.floor(Date.now() / 1000);
                     
                     const msgHash = generateHash(decryptedText);
                     logMessage(db, msgId, clientAddress, currentRoom, msgHash, 'CTAP_MSG');
@@ -218,8 +330,9 @@ wss.on('connection', async (ws, req) => {
                 }
             }
             else if (msgType === 'web_msg') {
-                const text = (data.text || '').trim();
-                const userName = (data.username || `Web-${clientAddress}`);
+                const text = (typeof data.text === 'string' ? data.text : '').trim().substring(0, MAX_MESSAGE_LENGTH);
+                const rawUsername = typeof data.username === 'string' ? data.username : `Web-${clientAddress}`;
+                const userName = rawUsername.substring(0, 64);
                 if (text) {
                     const msgId = uuidv4();
                     const timestamp = Math.floor(Date.now() / 1000);
@@ -254,7 +367,7 @@ wss.on('connection', async (ws, req) => {
                 }
             }
         } catch (e) {
-            console.error(`[SERVER] Received invalid message: ${message}`, e);
+            console.error(`[SERVER] Error processing message from ${clientAddress}:`, e.message);
         }
     });
 
@@ -271,6 +384,11 @@ wss.on('connection', async (ws, req) => {
 const net = require('net');
 
 const tcpServer = net.createServer((socket) => {
+    // Only accept connections from localhost
+    if (socket.remoteAddress !== '127.0.0.1' && socket.remoteAddress !== '::1' && socket.remoteAddress !== '::ffff:127.0.0.1') {
+        socket.destroy();
+        return;
+    }
     console.log(`[TCP] Client connected from ${socket.remoteAddress}:${socket.remotePort}`);
     socket.write('CTAP_SYS RAW DB SOCKET UPLINK\n');
     socket.write('Commands: GET_LOGS, GET_CONNS, EXIT\n');
@@ -303,24 +421,21 @@ const tcpServer = net.createServer((socket) => {
     socket.on('close', () => {
         console.log(`[TCP] Client disconnected`);
     });
-    
+
     socket.on('error', (err) => {
-        console.error(`[TCP] Socket error:`, err.message);
+        console.error(`[TCP] Socket error: ${err.message}`);
     });
 });
 
 initDatabase().then((database) => {
     db = database;
-    server.listen(SERVER_PORT, '0.0.0.0', () => {
-        console.log(`[SERVER] Listening on http://0.0.0.0:${SERVER_PORT}...`);
-        console.log(`[SERVER] WebSocket Handshake auth: ENABLED`);
-        console.log(`[SERVER] Audit trail DB: local sqlite3`);
+    server.listen(SERVER_PORT, () => {
+        console.log(`[SERVER] HTTP/WS server running on port ${SERVER_PORT}`);
     });
-
-    tcpServer.listen(8767, '0.0.0.0', () => {
-        console.log(`[TCP SERVER] Raw socket interface listening on port 8767`);
+    tcpServer.listen(8767, '127.0.0.1', () => {
+        console.log(`[TCP] Internal DB socket listening on 127.0.0.1:8767`);
     });
-}).catch(err => {
-    console.error('Failed to initialize db', err);
+}).catch((err) => {
+    console.error('[FATAL] Failed to initialize database:', err);
     process.exit(1);
 });

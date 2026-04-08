@@ -1,3 +1,4 @@
+require('dotenv').config();
 const WebSocket = require('ws');
 const serialport = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
@@ -8,11 +9,19 @@ const { v4: uuidv4 } = require('uuid');
 // =======================
 // CONFIGURATION
 // =======================
-const SERIAL_PORT_NAME = "COM3"; // Or /dev/ttyUSB0
-const BAUD_RATE = 115200;
-const WS_SERVER = "ws://localhost:8766";
-const HANDSHAKE_SECRET = "CTAP-GLOVE-AUTH-2026";
-const FIXED_AES_KEY_HEX = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+const SERIAL_PORT_NAME = process.env.SERIAL_PORT_NAME || "COM3"; // Or /dev/ttyUSB0
+const BAUD_RATE = parseInt(process.env.BAUD_RATE || '115200', 10);
+const WS_SERVER = process.env.WS_SERVER || "ws://localhost:8766";
+const HANDSHAKE_SECRET = process.env.HANDSHAKE_SECRET;
+const FIXED_AES_KEY_HEX = process.env.AES_KEY_HEX;
+
+if (!HANDSHAKE_SECRET) {
+    throw new Error('[FATAL] HANDSHAKE_SECRET environment variable is not set');
+}
+if (!FIXED_AES_KEY_HEX || FIXED_AES_KEY_HEX.length !== 64) {
+    throw new Error('[FATAL] AES_KEY_HEX environment variable is not set or invalid (must be 64 hex chars)');
+}
+
 const AES_KEY = Buffer.from(FIXED_AES_KEY_HEX, 'hex');
 
 const encryptPayload = (plaintext) => {

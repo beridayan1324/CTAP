@@ -18,6 +18,8 @@
     "jsonwebtoken": "^9.0.3",
     "sqlite3": "^6.0.1",
     "uuid": "^13.0.0",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "serialport": "^1.0.0",
+    "@serialport/parser-readline": "^1.0.0"
   }
 }

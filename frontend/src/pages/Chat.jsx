@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../App';
 
+// Escape HTML to prevent XSS when rendering message text
+const escapeHtml = (str) => {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+};
+
+const HANDSHAKE_SECRET = import.meta.env.VITE_HANDSHAKE_SECRET;
+
 const Chat = () => {
     const { username } = useContext(AuthContext);
     const [ws, setWs] = useState(null);
@@ -29,10 +42,16 @@ const Chat = () => {
 
             socket.onmessage = (event) => {
                 if (!isMounted) return;
-                const data = JSON.parse(event.data);
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (e) {
+                    console.warn('[WS] Received invalid JSON');
+                    return;
+                }
                 if (data.type === 'auth_challenge') {
                     (async () => {
-                        const secret = "CTAP-GLOVE-AUTH-2026";
+                        const secret = HANDSHAKE_SECRET || "CTAP-GLOVE-AUTH-2026";
                         const encoder = new TextEncoder();
                         const dataBuffer = encoder.encode(data.challenge + secret);
                         const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
@@ -48,7 +67,7 @@ const Chat = () => {
                     setMessages(prev => [...prev, data]);
                 } else if (data.type === 'room_joined') {
                     setRoom(data.room);
-                    setMessages([{ type: 'system', text: `>> Joined Room: ${data.room}` }]);
+                    setMessages([{ type: 'system', text: `>> Joined Room: ${escapeHtml(data.room)}` }]);
                 }
             };
 
@@ -161,7 +180,7 @@ const Chat = () => {
                     <button onClick={joinRoom} style={{ width: '40%', padding: '0 10px' }}>Join</button>
                 </div>
                 <div style={{ marginTop: '5px', fontSize: '11px', color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>
-                    [ Current Room: {room} ]
+                    [ Current Room: {escapeHtml(room)} ]
                 </div>
                 
                 <h3 style={{ marginTop: '40px' }}>ESP32 Hardware</h3>
@@ -202,9 +221,9 @@ const Chat = () => {
                             <div key={i} className={`message-row ${isOwn ? 'own' : ''}`}>
                                 <div className="message-meta">
                                     <span className="message-time">{new Date(m.timestamp * 1000).toLocaleTimeString()}</span>
-                                    <span>{m.sender}</span>
+                                    <span>{escapeHtml(m.sender)}</span>
                                 </div>
-                                <div className="message-text">&gt; {m.text}</div>
+                                <div className="message-text">&gt; {escapeHtml(m.text)}</div>
                             </div>
                         );
                     })}
