@@ -1,8 +1,7 @@
 // ===== ESP32 PIN CONFIG =====
 // Fingers: 34, 35, 32, 33, 25
-// Send/Space: 26
-int fsrPins[] = {34, 35, 32, 33, 25, 26};
-int numFSRs = 6;
+int fsrPins[] = {34, 35, 32, 33, 25};
+int numFSRs = 5;
 
 int ledPin = 2;
 
@@ -12,16 +11,16 @@ int ledPin = 2;
 int pressThreshold = 500;    // Reading ABOVE this = finger pressed
 int releaseThreshold = 300;  // Reading BELOW this = finger released (hysteresis)
 unsigned long debounceTime = 50;
-unsigned long letterWait = 250;
+unsigned long letterWait = 300; // slightly longer to comfortably hit all 5
 
 // ===== STATE =====
-bool fingerCurrentlyPressed[6] = {false};  // Is the FSR currently held down?
+bool fingerCurrentlyPressed[5] = {false};  // Is the FSR currently held down?
 bool fingerHit[5] = {false};               // Was this finger pressed in this letter window?
 unsigned long firstHitTime = 0;
-unsigned long lastDebounce[6] = {0};
+unsigned long lastDebounce[5] = {0};
 
-// Track consecutive space hits
-int spaceHitCount = 0;
+// Track consecutive all-fingers hits
+int allFingersCount = 0;
 
 // Accumulated text message
 String textSentence = "";
@@ -34,7 +33,7 @@ void setup() {
   analogSetAttenuation(ADC_11db);
 
   Serial.println("CTAP FSR 5-Finger Mode Ready");
-  Serial.println("Pins: 34, 35, 32, 33, 25 (Fingers) | 26 (Send/Space)");
+  Serial.println("Pins: 34, 35, 32, 33, 25 (Fingers)");
 }
 
 void loop() {
@@ -53,38 +52,9 @@ void loop() {
       fingerCurrentlyPressed[i] = true;
       digitalWrite(ledPin, !digitalRead(ledPin)); // Flash LED
 
-      if (i < 5) {
-        // --- FINGER PRESS ---
-        spaceHitCount = 0;
-        fingerHit[i] = true;
-        if (firstHitTime == 0) firstHitTime = now;
-
-      } else {
-        // --- SPACE / SEND PRESS (Pin 26) ---
-        spaceHitCount++;
-
-        if (spaceHitCount >= 3) {
-          // === SEND COMMAND (3x Space) ===
-          textSentence.trim();
-          Serial.println(textSentence);
-
-          // Reset
-          textSentence = "";
-          spaceHitCount = 0;
-          resetFingers();
-
-          // Long flash to confirm send
-          digitalWrite(ledPin, HIGH); delay(200); digitalWrite(ledPin, LOW);
-          return;
-
-        } else {
-          // === STANDARD SPACE ===
-          if (textSentence.length() > 0 &&
-              textSentence[textSentence.length() - 1] != ' ') {
-            textSentence += " ";
-          }
-        }
-      }
+      // --- FINGER PRESS ---
+      fingerHit[i] = true;
+      if (firstHitTime == 0) firstHitTime = now;
     }
 
     // --- Detect RELEASE ---
@@ -102,12 +72,39 @@ void loop() {
       currentBits += fingerHit[i] ? "1" : "0";
     }
 
-    // 2. Convert bits to letter
-    String letter = getLetterFromBits(currentBits);
+    // 2. Handle 5-finger action ("11111")
+    if (currentBits == "11111") {
+      allFingersCount++;
+      
+      if (allFingersCount >= 2) {
+        // === SEND COMMAND (2x All Fingers) ===
+        textSentence.trim();
+        Serial.println(textSentence);
 
-    // 3. Add to sentence
-    if (letter != "") {
-      textSentence += letter;
+        // Reset
+        textSentence = "";
+        allFingersCount = 0;
+
+        // Long flash to confirm send
+        digitalWrite(ledPin, HIGH); delay(200); digitalWrite(ledPin, LOW);
+      } else {
+        // === STANDARD SPACE ===
+        if (textSentence.length() > 0 &&
+            textSentence[textSentence.length() - 1] != ' ') {
+          textSentence += " ";
+        }
+      }
+    } else {
+      // It's a regular letter
+      allFingersCount = 0;
+      
+      // 3. Convert bits to letter
+      String letter = getLetterFromBits(currentBits);
+
+      // 4. Add to sentence
+      if (letter != "") {
+        textSentence += letter;
+      }
     }
 
     resetFingers();
@@ -145,8 +142,6 @@ String getLetterFromBits(String bits) {
   if (bits == "11000") return "x";
   if (bits == "11001") return "y";
   if (bits == "11010") return "z";
-
-  if (bits == "11111") return "?";
 
   return "";
 }
