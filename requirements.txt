@@ -1,3 +1,7 @@
 pyserial
-websockets
 cryptography
+websockets
+flask>=3.0.0
+flask-sock
+pyjwt
+bcrypt

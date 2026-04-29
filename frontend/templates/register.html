@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Register — CTAP{% endblock %}
+{% block content %}
+<div class="auth-container">
+  <form id="register-form" class="technical-panel" method="post" action="#">
+    <h2>Register Account</h2>
+    <p id="reg-error" class="error-text" style="display:none;"></p>
+    <input type="text" name="username" placeholder="Username" required autocomplete="username">
+    <input type="password" name="password" placeholder="Password" required autocomplete="new-password">
+    <input type="password" name="confirm" placeholder="Confirm Password" required autocomplete="new-password">
+    <button type="submit" style="margin-top:10px;">Register</button>
+    <div style="text-align:center;font-size:11px;margin-top:10px;font-family:var(--font-mono);">
+      Already have an account? <a href="{{ url_for('login_page') }}" style="color:var(--text-primary);text-decoration:underline;">Log In</a>
+    </div>
+  </form>
+</div>
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('reg-error');
+  err.style.display = 'none';
+  const fd = new FormData(e.target);
+  const username = fd.get('username');
+  const password = fd.get('password');
+  if (fd.get('confirm') !== password) {
+    err.textContent = '[PASSWORDS DO NOT MATCH]';
+    err.style.display = 'block';
+    return;
+  }
+  try {
+    let res = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const regData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      err.textContent = '[' + (regData.error || 'REGISTRATION_FAIL') + ']';
+      err.style.display = 'block';
+      return;
+    }
+    res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      err.textContent = '[' + (data.error || 'Login after register failed') + ']';
+      err.style.display = 'block';
+      return;
+    }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('username', data.username);
+    location.href = '/chat';
+  } catch {
+    err.textContent = '[Network error]';
+    err.style.display = 'block';
+  }
+});
+</script>
+{% endblock %}

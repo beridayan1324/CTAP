@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}CTAP Chat — Home{% endblock %}
+{% block content %}
+<div class="landing-hero">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-content">
+    <h1>CTAP Chat</h1>
+    <p class="tagline">Secure Hardware &amp; Web Chat System</p>
+    <a class="cta" href="{{ url_for('login_page') }}">Log In</a>
+  </div>
+</div>
+{% endblock %}

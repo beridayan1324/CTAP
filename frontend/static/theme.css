@@ -1,0 +1,436 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=Space+Mono&display=swap');
+
+:root {
+  --bg-color: #030303;
+  --panel-bg: rgba(255, 255, 255, 0.02);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.3);
+  --text-primary: #ffffff;
+  --text-secondary: #888888;
+  --accent: #d4d4d4;
+  --success: #34d399;
+  --error: #ef4444;
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+main.page-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.05"/%3E%3C/svg%3E');
+  pointer-events: none;
+  z-index: -1;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+  font-weight: 400;
+}
+
+button {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  outline: none;
+}
+
+button:hover {
+  background: var(--text-primary);
+  color: var(--bg-color);
+  border-color: var(--text-primary);
+}
+
+input {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px 16px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input:focus {
+  border-color: var(--border-hover);
+}
+
+a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--text-primary);
+}
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  padding: 20px;
+}
+
+.technical-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  padding: 40px;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.technical-panel h2 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.nav-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 40px;
+  border-bottom: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.nav-links {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+}
+
+.nav-bar a {
+  color: var(--text-primary);
+}
+
+.chat-layout {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 75px);
+  box-sizing: border-box;
+}
+
+.sidebar {
+  width: 300px;
+  border-right: 1px solid var(--border-color);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+}
+
+.messages-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.messages-list {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-row {
+  display: flex;
+  gap: 15px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.message-meta {
+  color: var(--text-secondary);
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+}
+
+.message-time {
+  opacity: 0.5;
+}
+
+.message-text {
+  color: var(--text-primary);
+  flex: 1;
+  word-break: break-word;
+}
+
+.message-row.own .message-text {
+  color: var(--bg-color);
+  background: var(--text-primary);
+  padding: 5px 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.input-area {
+  display: flex;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-color);
+}
+
+.input-area input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 20px 30px;
+  font-size: 14px;
+}
+
+.input-area button {
+  border: none;
+  border-left: 1px solid var(--border-color);
+  padding: 0 40px;
+}
+
+.audit-page {
+  padding: 40px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 15px;
+}
+
+.audit-header h2 {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+.audit-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.audit-tabs button.active {
+  background: var(--text-primary);
+  color: var(--bg-color);
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.audit-table th,
+.audit-table td {
+  padding: 12px 20px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.audit-table th {
+  color: var(--text-secondary);
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.audit-table tr:hover td {
+  background: var(--panel-bg);
+}
+
+.error-text {
+  color: var(--error);
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+
+/* Landing hero (CSS-only, no Three.js) */
+.landing-hero {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--bg-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.landing-hero .hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(255, 255, 255, 0.08), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(255, 255, 255, 0.05), transparent 45%),
+    radial-gradient(circle at 50% 100%, rgba(212, 212, 212, 0.03), transparent 55%);
+  animation: hero-drift 14s ease-in-out infinite alternate;
+}
+
+@keyframes hero-drift {
+  from {
+    transform: scale(1) translate(0, 0);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.05) translate(-2%, 1%);
+    opacity: 1;
+  }
+}
+
+.landing-hero .hero-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 2rem;
+}
+
+.landing-hero h1 {
+  font-family: var(--font-sans);
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  margin-bottom: 1rem;
+}
+
+.landing-hero .tagline {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.7;
+  margin-bottom: 3rem;
+}
+
+.landing-hero .cta {
+  display: inline-block;
+  padding: 16px 32px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.landing-hero .cta:hover {
+  background: var(--text-primary);
+  color: var(--bg-color);
+  border-color: var(--text-primary);
+}
+
+.room-row {
+  display: flex;
+  gap: 0;
+}
+
+.room-row input {
+  border-right: none;
+  width: 60%;
+}
+
+.room-row button {
+  width: 40%;
+  padding: 0 10px;
+}
+
+.mono-muted {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--success);
+  font-family: var(--font-mono);
+}
+
+.serial-state {
+  margin-top: 5px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.7;
+}
+
+.server-status {
+  margin-top: auto;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+/* system line in chat */
+.message-system {
+  opacity: 0.5;
+  font-size: 11px;
+  margin: 10px 0;
+  font-family: var(--font-mono);
+}

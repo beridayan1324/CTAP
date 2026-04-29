@@ -28,7 +28,7 @@ This project enables a smart glove to transmit text wirelessly to a remote displ
 2. **Install Dependencies:**
 Open your terminal/command prompt in the project folder and run:
 ```bash
-pip install pyserial websockets cryptography
+pip install -r requirements.txt
 
 ```
 
@@ -48,11 +48,11 @@ The server acts as the "Receiver." It waits for messages from the glove, decrypt
 * **Mac/Linux:** Open Terminal, type `ifconfig` or `ip a`.
 
 
-2. **Run the Server Script:**
-python server.py
+2. **Run the Server:**
+`flask --app backend.app run --host 0.0.0.0 --port 8766`
+(or `python server.py` — same app)
 
-3. **Verify:** You should see the message:
-`[SERVER] Listening on 0.0.0.0:8765...`
+3. **Verify:** You should see the Flask server listening on port **8766** (HTTP + WebSocket).
 
 ### Step 2: Start the Client (PC #2)
 
@@ -106,7 +106,7 @@ The glove translates binary finger combinations into English letters.
 ## Troubleshooting
 
 * **Connection Refused:**
-* Ensure PC #1 (Server) has the Firewall configured to allow port `8765`.
+* Ensure PC #1 (Server) has the Firewall configured to allow port `8766`.
 * Ensure the `WS_SERVER` IP in `client.py` matches PC #1 exactly.
 
 

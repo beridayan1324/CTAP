@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Chat — CTAP{% endblock %}
+{% block content %}
+<script>
+if (!localStorage.getItem('token')) location.replace('/login');
+</script>
+<nav class="nav-bar">
+  <div style="display:flex;align-items:center;gap:30px;">
+    <div style="font-weight:600;letter-spacing:0.1em;"><a href="/chat" style="color:white;">CTAP Chat</a></div>
+    <a href="/chat">Chat Room</a>
+    <a href="/audit">Audit Logs</a>
+  </div>
+  <div class="nav-links">
+    <span id="nav-user" style="color:var(--text-secondary);"></span>
+    <button type="button" id="logout-btn">Logout</button>
+  </div>
+</nav>
+<div class="chat-layout">
+  <aside class="sidebar">
+    <h3>Rooms</h3>
+    <div class="room-row">
+      <input type="text" id="room-input" placeholder="Room Name">
+      <button type="button" id="join-room">Join</button>
+    </div>
+    <div id="current-room" class="mono-muted">[ Current Room: default ]</div>
+    <h3 style="margin-top:40px;">ESP32 Hardware</h3>
+    <button type="button" id="serial-toggle">Connect ESP32</button>
+    <div id="serial-state" class="serial-state">State: Offline</div>
+    <div id="server-status" class="server-status">Server: …</div>
+  </aside>
+  <div class="messages-area">
+    <div class="messages-list" id="messages-list"></div>
+    <div class="input-area">
+      <input type="text" id="msg-input" placeholder="Type a message..." autofocus>
+      <button type="button" id="send-btn">Send</button>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='chat.js') }}" defer></script>
+{% endblock %}
